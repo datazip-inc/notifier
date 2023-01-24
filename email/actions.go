@@ -20,8 +20,8 @@ type Recipient struct {
 	BCCEmails []string
 }
 
-func getHTMLTemplate(template string, args ...interface{}) (string, error) {
-	htmlData, err := os.ReadFile(template)
+func ParseHTMLTemplate(templatePath string, args ...interface{}) (string, error) {
+	htmlData, err := os.ReadFile(templatePath)
 	if err != nil {
 		return "", err
 	}
@@ -29,7 +29,12 @@ func getHTMLTemplate(template string, args ...interface{}) (string, error) {
 	data := string(htmlData)
 
 	for i, val := range args {
-		data = strings.ReplaceAll(data, fmt.Sprintf("$%d", i+1), fmt.Sprintf("%v", val))
+		beingReplaced, replacedBy := fmt.Sprintf("$%d", i+1), fmt.Sprintf("%v", val)
+		if !strings.Contains(data, beingReplaced) {
+			return "", fmt.Errorf("template doesn't contains arg %s", beingReplaced)
+		}
+
+		data = strings.ReplaceAll(data, beingReplaced, replacedBy)
 	}
 
 	return data, nil
@@ -44,49 +49,20 @@ func (m *Mailer) newSession() (*session.Session, error) {
 
 }
 
-func (m *Mailer) NotifyEmail(subject string, fromEmail string, recipient Recipient, template string, args ...interface{}) {
-	if err := standardMailer.NotifyEmailE(subject, fromEmail, recipient, template, args...); err != nil {
+func (m *Mailer) NotifyEmail(subject string, fromEmail string, recipient Recipient, content string) {
+	if err := standardMailer.NotifyEmailE(subject, fromEmail, recipient, content); err != nil {
 		logrus.Error("failed to send email : %s", err)
 	}
 }
 
 // NotifyEmailE sends email to specified email IDs
-func (m *Mailer) NotifyEmailE(subject string, fromEmail string, recipient Recipient, template string, args ...interface{}) error {
-	msgBody, err := getHTMLTemplate(template, args...)
-	if err != nil {
-		return fmt.Errorf("failed to read html template: %s : %s", template, err)
-	}
-
-	// set to section
-	var recipients []*string
-	for _, r := range recipient.ToEmails {
-		recipient := r
-		recipients = append(recipients, &recipient)
-	}
-
-	// set cc section
-	var ccRecipients []*string
-	if len(recipient.CCEmails) > 0 {
-		for _, r := range recipient.CCEmails {
-			ccrecipient := r
-			ccRecipients = append(ccRecipients, &ccrecipient)
-		}
-	}
-
-	// set bcc section
-	var bccRecipients []*string
-	if len(recipient.BCCEmails) > 0 {
-		for _, r := range recipient.BCCEmails {
-			bccrecipient := r
-			recipients = append(recipients, &bccrecipient)
-		}
-	}
-
+func (m *Mailer) NotifyEmailE(subject string, fromEmail string, recipient Recipient, content string) error {
 	sess, err := m.newSession()
 	if err != nil {
 		return err
 	}
 
+	recipients, ccRecipients, bccRecipients := generateRecipients(recipient)
 	// create an SES session.
 	svc := ses.New(sess)
 
@@ -105,7 +81,7 @@ func (m *Mailer) NotifyEmailE(subject string, fromEmail string, recipient Recipi
 			Body: &ses.Body{
 				Html: &ses.Content{
 					Charset: aws.String("UTF-8"),
-					Data:    aws.String(msgBody),
+					Data:    aws.String(content),
 				},
 			},
 
@@ -132,16 +108,11 @@ func (m *Mailer) NotifyEmailE(subject string, fromEmail string, recipient Recipi
 // Experimental Feature
 //
 // NotifyRawEmailE sends email to specified email IDs with attachments
-func (m *Mailer) NotifyRawEmailE(subject string, fromEmail string, recipient Recipient, attachments []string, template string, args ...interface{}) error {
+func (m *Mailer) NotifyRawEmailE(subject string, fromEmail string, recipient Recipient, content string, attachments []string) error {
 	// create new AWS session
 	sess, err := m.newSession()
 	if err != nil {
 		return err
-	}
-
-	msgBody, err := getHTMLTemplate(template, args...)
-	if err != nil {
-		return fmt.Errorf("failed to read html template: %s : %s", template, err)
 	}
 
 	// create raw message
@@ -183,7 +154,7 @@ func (m *Mailer) NotifyRawEmailE(subject string, fromEmail string, recipient Rec
 	msg.SetAddressHeader("From", fromEmail, "<name>")
 	msg.SetHeader("To", recipient.ToEmails...)
 	msg.SetHeader("Subject", subject)
-	msg.SetBody("text/html", msgBody)
+	msg.SetBody("text/html", content)
 
 	// If attachments exists
 	if len(attachments) != 0 {
@@ -209,4 +180,33 @@ func (m *Mailer) NotifyRawEmailE(subject string, fromEmail string, recipient Rec
 
 	logrus.Println("Email sent successfully to: ", recipient.ToEmails)
 	return err
+}
+
+func generateRecipients(recipient Recipient) ([]*string, []*string, []*string) {
+	// set to section
+	var recipients []*string
+	for _, r := range recipient.ToEmails {
+		recipient := r
+		recipients = append(recipients, &recipient)
+	}
+
+	// set cc section
+	var ccRecipients []*string
+	if len(recipient.CCEmails) > 0 {
+		for _, r := range recipient.CCEmails {
+			ccrecipient := r
+			ccRecipients = append(ccRecipients, &ccrecipient)
+		}
+	}
+
+	// set bcc section
+	var bccRecipients []*string
+	if len(recipient.BCCEmails) > 0 {
+		for _, r := range recipient.BCCEmails {
+			bccrecipient := r
+			bccRecipients = append(bccRecipients, &bccrecipient)
+		}
+	}
+
+	return recipients, ccRecipients, bccRecipients
 }
