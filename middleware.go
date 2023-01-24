@@ -2,10 +2,12 @@ package notifier
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"runtime/debug"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -34,7 +36,7 @@ func (rw *customResponseWriter) Write(content []byte) (int, error) {
 // http requests such as status code >= 400
 func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// create custom router
+		// create custom writer
 		rw := NewResponseWriter(w)
 
 		body, err := io.ReadAll(r.Body)
@@ -65,10 +67,53 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 
 		description := fmt.Sprintf("failed request with StatusCode: %d", rw.statusCode)
 
+		var request map[string]interface{}
+		if err := json.Unmarshal(body, &request); err != nil {
+			NotifyError("Exception Handler Middleware Recovery", "failed to unmarshal request body", fmt.Sprintf("%v : %v", string(body), err))
+			return
+		}
+
+		request = deleteFields(request)
+		body, err = json.Marshal(request)
+		if err != nil {
+			NotifyError("Exception Handler Middleware Recovery", "failed to marshal request body", fmt.Sprintf("%v : %v", request, err))
+			return
+		}
+
 		if rw.statusCode >= 500 {
 			NotifyError("Exception Handler Middleware Error", description, "", "url", r.RequestURI, "Response", string(rw.response), "Request", string(body))
 		} else if rw.statusCode >= 400 {
 			NotifyWarn("Exception Handler Middleware Warn", description, fmt.Sprintf("Response: %s", string(rw.response)))
 		}
 	})
+}
+
+func deleteFields(content map[string]interface{}) map[string]interface{} {
+	for key, value := range content {
+		if strings.EqualFold(key, "password") {
+			delete(content, key)
+			continue
+		}
+
+		switch value := value.(type) {
+		case map[string]interface{}:
+			content[key] = deleteFields(value)
+		case []interface{}:
+			// array to temporarily store decrypted objects
+			tempArr := []interface{}{}
+			for _, val := range value {
+				// if the value is a map/obj
+				if mp, isMap := val.(map[string]interface{}); isMap {
+					obj := deleteFields(mp)
+					tempArr = append(tempArr, obj)
+				} else {
+					tempArr = append(tempArr, val)
+				}
+			}
+			// replace original array of objects with decrypted objects
+			content[key] = tempArr
+		}
+	}
+
+	return content
 }
