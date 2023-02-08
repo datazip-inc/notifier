@@ -70,7 +70,6 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 		body = func() []byte {
 			var request map[string]interface{}
 			if err := json.Unmarshal(body, &request); err != nil {
-				NotifyError("Exception Handler Middleware Recovery", "failed to unmarshal request body", fmt.Sprintf("%v : %v", string(body), err), "URI", r.RequestURI)
 				return body
 			}
 
