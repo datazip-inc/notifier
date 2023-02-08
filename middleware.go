@@ -71,14 +71,14 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 		body = func() []byte {
 			var request map[string]interface{}
 			if err := json.Unmarshal(body, &request); err != nil {
-				NotifyError("Exception Handler Middleware Recovery", "failed to un-marshal request body", fmt.Sprintf("%v : %v", request, err), "URI", r.RequestURI)
+				NotifyWarn("Exception Handler Middleware Recovery", "failed to un-marshal request body", fmt.Sprintf("%v : %v", request, err), "URI", r.RequestURI)
 				return body
 			}
 
 			request = deleteFields(request)
 			modifiedBody, err := json.Marshal(request)
 			if err != nil {
-				NotifyError("Exception Handler Middleware Recovery", "failed to marshal request body", fmt.Sprintf("%v : %v", request, err), "URI", r.RequestURI)
+				NotifyWarn("Exception Handler Middleware Recovery", "failed to marshal request body", fmt.Sprintf("%v : %v", request, err), "URI", r.RequestURI)
 				return body
 			}
 
