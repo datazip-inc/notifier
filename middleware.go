@@ -42,7 +42,7 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			logrus.Error(err)
-			NotifyError("Exception Handler Middleware Error", "failed to read request body", err.Error())
+			NotifyError("Exception Handler Middleware Error", "failed to read request body", err.Error(), "URI", r.RequestURI)
 			return
 		}
 
@@ -56,7 +56,7 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 				// print stack trace as well
 				fmt.Println(stackTrace)
 				w.WriteHeader(http.StatusInternalServerError)
-				NotifyError("Exception Handler Middleware Recovery", "Check stack trace above", fmt.Sprintf("%v\n%s", err, stackTrace), "Request", string(body))
+				NotifyError("Exception Handler Middleware Recovery", "Check stack trace above", fmt.Sprintf("%v\n%s", err, stackTrace), "Request", string(body), "URI", r.RequestURI)
 			}
 		}()
 
@@ -67,23 +67,27 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 
 		description := fmt.Sprintf("failed request with StatusCode: %d", rw.statusCode)
 
-		var request map[string]interface{}
-		if err := json.Unmarshal(body, &request); err != nil {
-			NotifyError("Exception Handler Middleware Recovery", "failed to unmarshal request body", fmt.Sprintf("%v : %v", string(body), err))
-			return
-		}
+		body = func() []byte {
+			var request map[string]interface{}
+			if err := json.Unmarshal(body, &request); err != nil {
+				NotifyError("Exception Handler Middleware Recovery", "failed to unmarshal request body", fmt.Sprintf("%v : %v", string(body), err), "URI", r.RequestURI)
+				return body
+			}
 
-		request = deleteFields(request)
-		body, err = json.Marshal(request)
-		if err != nil {
-			NotifyError("Exception Handler Middleware Recovery", "failed to marshal request body", fmt.Sprintf("%v : %v", request, err))
-			return
-		}
+			request = deleteFields(request)
+			modifiedBody, err := json.Marshal(request)
+			if err != nil {
+				NotifyError("Exception Handler Middleware Recovery", "failed to marshal request body", fmt.Sprintf("%v : %v", request, err), "URI", r.RequestURI)
+				return body
+			}
+
+			return modifiedBody
+		}()
 
 		if rw.statusCode >= 500 {
-			NotifyError("Exception Handler Middleware Error", description, "", "url", r.RequestURI, "Response", string(rw.response), "Request", string(body))
+			NotifyError("Exception Handler Middleware Error", description, "", "url", r.RequestURI, "Response", string(rw.response), "Request", string(body), "URI", r.RequestURI)
 		} else if rw.statusCode >= 400 {
-			NotifyWarn("Exception Handler Middleware Warn", description, fmt.Sprintf("Response: %s", string(rw.response)))
+			NotifyWarn("Exception Handler Middleware Warn", description, fmt.Sprintf("Response: %s", string(rw.response)), "URI", r.RequestURI)
 		}
 	})
 }
