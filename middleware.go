@@ -43,6 +43,7 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 		if err != nil {
 			logrus.Error(err)
 			NotifyError("Exception Handler Middleware Error", "failed to read request body", err.Error(), "URI", r.RequestURI)
+			w.WriteHeader(http.StatusTeapot)
 			return
 		}
 
@@ -70,6 +71,7 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 		body = func() []byte {
 			var request map[string]interface{}
 			if err := json.Unmarshal(body, &request); err != nil {
+				NotifyError("Exception Handler Middleware Recovery", "failed to un-marshal request body", fmt.Sprintf("%v : %v", request, err), "URI", r.RequestURI)
 				return body
 			}
 
@@ -88,6 +90,8 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 		} else if rw.statusCode >= 400 {
 			NotifyWarn("Exception Handler Middleware Warn", description, fmt.Sprintf("Response: %s", string(rw.response)), "URI", r.RequestURI)
 		}
+
+		logrus.Debug("Exception Handler Middleware Passed!!!")
 	})
 }
 
