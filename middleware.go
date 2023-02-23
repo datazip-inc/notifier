@@ -42,7 +42,7 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			logrus.Error(err)
-			NotifyError("Exception Handler Middleware Error", "failed to read request body", err.Error(), "URI", r.RequestURI)
+			NotifyError("Exception Handler Middleware Error", "failed to read request body", err.Error())
 			w.WriteHeader(http.StatusTeapot)
 			return
 		}
@@ -57,7 +57,7 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 				// print stack trace as well
 				fmt.Println(stackTrace)
 				w.WriteHeader(http.StatusInternalServerError)
-				NotifyError("Exception Handler Middleware Recovery", "Check stack trace above", fmt.Sprintf("%v\n%s", err, stackTrace), "Request", string(body), "URI", r.RequestURI)
+				NotifyError("Exception Handler Middleware Recovery", "Check stack trace above", fmt.Sprintf("%v\n%s", err, stackTrace), "Request", string(body))
 			}
 		}()
 
@@ -66,19 +66,19 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 		cloneRequest.Body = io.NopCloser(bytes.NewReader(body))
 		next.ServeHTTP(rw, cloneRequest)
 
-		description := fmt.Sprintf("failed request with StatusCode: %d", rw.statusCode)
+		description := fmt.Sprintf("failed request with status code[%d] : url[%s] : origin[%s]", rw.statusCode, r.RequestURI, r.RemoteAddr)
 
 		body = func() []byte {
 			var request map[string]interface{}
 			if err := json.Unmarshal(body, &request); err != nil {
-				NotifyWarn("Exception Handler Middleware Recovery", "failed to un-marshal request body", fmt.Sprintf("%v : %v", request, err), "URI", r.RequestURI)
+				NotifyWarn("Exception Handler Middleware Recovery", "failed to un-marshal request body", fmt.Sprintf("%v : %v", request, err))
 				return body
 			}
 
 			request = deleteFields(request)
 			modifiedBody, err := json.Marshal(request)
 			if err != nil {
-				NotifyWarn("Exception Handler Middleware Recovery", "failed to marshal request body", fmt.Sprintf("%v : %v", request, err), "URI", r.RequestURI)
+				NotifyWarn("Exception Handler Middleware Recovery", "failed to marshal request body", fmt.Sprintf("%v : %v", request, err))
 				return body
 			}
 
@@ -86,9 +86,9 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 		}()
 
 		if rw.statusCode >= 500 {
-			NotifyError("Exception Handler Middleware Error", description, "", "url", r.RequestURI, "Response", string(rw.response), "Request", string(body), "URI", r.RequestURI)
+			NotifyError("Exception Handler Middleware Error", description, "", "Response", string(rw.response), "Request", string(body))
 		} else if rw.statusCode >= 400 {
-			NotifyWarn("Exception Handler Middleware Warn", description, fmt.Sprintf("Response: %s", string(rw.response)), "URI", r.RequestURI)
+			NotifyWarn("Exception Handler Middleware Error", description, "", "Response", string(rw.response), "Request", string(body))
 		}
 
 		logrus.Debug("Exception Handler Middleware Passed!!!")
