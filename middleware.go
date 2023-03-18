@@ -12,6 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var ExceptionURLS = []string{}
+
 type customResponseWriter struct {
 	http.ResponseWriter
 	statusCode int

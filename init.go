@@ -12,8 +12,6 @@ const (
 
 var standardNotifier *Notifier
 
-var ExceptionURLS = []string{}
-
 type Notifier struct {
 	slackClient *slack.Client
 	config      *Config
