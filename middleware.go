@@ -42,7 +42,6 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			logrus.Error(err)
-			NotifyError("Exception Handler Middleware Error", "failed to read request body", err.Error(), "URI", r.RequestURI)
 			w.WriteHeader(http.StatusTeapot)
 			return
 		}
@@ -66,29 +65,29 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 		cloneRequest.Body = io.NopCloser(bytes.NewReader(body))
 		next.ServeHTTP(rw, cloneRequest)
 
-		description := fmt.Sprintf("failed request with StatusCode: %d", rw.statusCode)
+		description := fmt.Sprintf("failed request on *%s* with StatusCode: %d", r.RequestURI, rw.statusCode)
 
 		body = func() []byte {
 			var request map[string]interface{}
 			if err := json.Unmarshal(body, &request); err != nil {
-				NotifyWarn("Exception Handler Middleware Recovery", "failed to un-marshal request body", fmt.Sprintf("%v : %v", request, err), "URI", r.RequestURI)
 				return body
 			}
 
 			request = deleteFields(request)
 			modifiedBody, err := json.Marshal(request)
 			if err != nil {
-				NotifyWarn("Exception Handler Middleware Recovery", "failed to marshal request body", fmt.Sprintf("%v : %v", request, err), "URI", r.RequestURI)
 				return body
 			}
 
 			return modifiedBody
 		}()
 
-		if rw.statusCode >= 500 {
-			NotifyError("Exception Handler Middleware Error", description, "", "url", r.RequestURI, "Response", string(rw.response), "Request", string(body), "URI", r.RequestURI)
-		} else if rw.statusCode >= 400 {
-			NotifyWarn("Exception Handler Middleware Warn", description, fmt.Sprintf("Response: %s", string(rw.response)), "URI", r.RequestURI)
+		if !ArrayContains(ExceptionURLS, r.RequestURI) {
+			if rw.statusCode >= 500 {
+				NotifyError("Exception Handler Middleware Error", description, "", "Response", string(rw.response), "Request", string(body))
+			} else if rw.statusCode >= 400 {
+				NotifyWarn("Exception Handler Middleware Warn", description, "", "Response", string(rw.response), "Request", string(body))
+			}
 		}
 
 		logrus.Debug("Exception Handler Middleware Passed!!!")

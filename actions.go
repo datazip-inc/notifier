@@ -49,25 +49,27 @@ func (n *Notifier) NotifyErrorE(errorAt, description, errString string, fields .
 		return errors.New("❌ Invalid number of fields passed, only even number of fields allowed")
 	}
 
-	attachmentFields := []slack.AttachmentField{
+	mainMessageFields := []slack.AttachmentField{
 		{Title: "ErrorAt", Value: errorAt},
 		{Title: "Description", Value: description},
 	}
 
+	additionalMessageFields := []slack.AttachmentField{}
+
 	for i := 0; i < len(fields); i += 2 {
-		attachmentFields = append(attachmentFields, slack.AttachmentField{
+		additionalMessageFields = append(additionalMessageFields, slack.AttachmentField{
 			Title: fields[i],
 			Value: fields[i+1],
 		})
 	}
 
 	if len(errString) < 4000 {
-		err := n.sendOnSlack(errString, errorColor, n.config.Error, attachmentFields...)
+		err := n.SendOnSlack(errString, errorColor, n.config.Error, mainMessageFields, additionalMessageFields)
 		if err != nil {
 			return fmt.Errorf("❌ Failed to report error on slack: %s", err)
 		}
 	} else {
-		err := n.sendOnSlackAsFile(errString, errorColor, n.config.Error, attachmentFields...)
+		err := n.SendOnSlackAsFile(errString, errorColor, n.config.Error, mainMessageFields, additionalMessageFields)
 		if err != nil {
 			return fmt.Errorf("❌ Failed to report error on slack: %s", err)
 		}
@@ -86,19 +88,20 @@ func (n *Notifier) NotifySuccessE(successAt, description, successString string, 
 		return errors.New("❌ Invalid number of fields passed, only even number of fields allowed")
 	}
 
-	attachmentFields := []slack.AttachmentField{
+	mainMessageFields := []slack.AttachmentField{
 		{Title: "SuccessAt", Value: successAt},
 		{Title: "Description", Value: description},
 	}
 
+	additionalMessageFields := []slack.AttachmentField{}
 	for i := 0; i < len(fields); i += 2 {
-		attachmentFields = append(attachmentFields, slack.AttachmentField{
+		additionalMessageFields = append(additionalMessageFields, slack.AttachmentField{
 			Title: fields[i],
 			Value: fields[i+1],
 		})
 	}
 
-	err := n.sendOnSlack(successString, successColor, n.config.Success, attachmentFields...)
+	err := n.SendOnSlack(successString, successColor, n.config.Success, mainMessageFields, additionalMessageFields)
 	if err != nil {
 		return fmt.Errorf("❌ Failed to report success on slack: %s", err)
 	}
@@ -116,19 +119,21 @@ func (n *Notifier) NotifyWarnE(warnAt, description, warnString string, fields ..
 		return errors.New("❌ Invalid number of fields passed, only even number of fields allowed")
 	}
 
-	attachmentFields := []slack.AttachmentField{
+	mainMessageFields := []slack.AttachmentField{
 		{Title: "WarnAt", Value: warnAt},
 		{Title: "Description", Value: description},
 	}
 
+	additionalMessageFields := []slack.AttachmentField{}
+
 	for i := 0; i < len(fields); i += 2 {
-		attachmentFields = append(attachmentFields, slack.AttachmentField{
+		additionalMessageFields = append(additionalMessageFields, slack.AttachmentField{
 			Title: fields[i],
 			Value: fields[i+1],
 		})
 	}
 
-	err := n.sendOnSlack(warnString, warnColor, n.config.Warn, attachmentFields...)
+	err := n.SendOnSlack(warnString, warnColor, n.config.Warn, mainMessageFields, additionalMessageFields)
 	if err != nil {
 		return fmt.Errorf("❌ Failed to report warn on slack: %s", err)
 	}
@@ -136,9 +141,9 @@ func (n *Notifier) NotifyWarnE(warnAt, description, warnString string, fields ..
 	return nil
 }
 
-// sendOnSlackAsFile sends text as file on slack channel
-func (n *Notifier) sendOnSlackAsFile(text, messageColor string, channelConfig *SlackChannelConfig, fields ...slack.AttachmentField) error {
-	err := n.sendOnSlack("", messageColor, channelConfig, fields...)
+// SendOnSlackAsFile sends text as file on slack channel
+func (n *Notifier) SendOnSlackAsFile(text, messageColor string, channelConfig *SlackChannelConfig, messageAttachments []slack.AttachmentField, additionalMessageFields []slack.AttachmentField) error {
+	err := n.SendOnSlack("", messageColor, channelConfig, messageAttachments, additionalMessageFields)
 	if err != nil {
 		return err
 	}
@@ -157,7 +162,7 @@ func (n *Notifier) sendOnSlackAsFile(text, messageColor string, channelConfig *S
 	return nil
 }
 
-func (n *Notifier) sendOnSlack(text, messageColor string, channelConfig *SlackChannelConfig, fields ...slack.AttachmentField) error {
+func (n *Notifier) SendOnSlack(text, messageColor string, channelConfig *SlackChannelConfig, messageAttachments []slack.AttachmentField, additionalMessageFields []slack.AttachmentField) error {
 	mentions := generateMentions(channelConfig.Mentions)
 
 	// Create the Slack attachment that we will send to the channel
@@ -165,15 +170,34 @@ func (n *Notifier) sendOnSlack(text, messageColor string, channelConfig *SlackCh
 		Pretext: mentions,
 		Text:    text,
 		Color:   messageColor,
-		Fields:  append([]slack.AttachmentField{}, fields...),
+		Fields:  messageAttachments,
 		Footer:  time.Now().Format("2006-01-02 15:04:05"),
 	}
-	_, _, err := n.slackClient.PostMessage(
+	_, timeStamp, err := n.slackClient.PostMessage(
 		channelConfig.ChannelID,
 		slack.MsgOptionAttachments(attachment),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to send message : %s", err)
+	}
+
+	for _, field := range additionalMessageFields {
+		newAttachment := slack.Attachment{
+			Color:  messageColor,
+			Fields: []slack.AttachmentField{field},
+			Footer: time.Now().Format("2006-01-02 15:04:05"),
+		}
+		_, currentTimestamp, err := n.slackClient.PostMessage(
+			channelConfig.ChannelID,
+			slack.MsgOptionAttachments(newAttachment),
+			slack.MsgOptionTS(timeStamp),
+		)
+		if err != nil {
+			continue
+		}
+
+		// update the timestamp if message sent in thread successfully
+		timeStamp = currentTimestamp
 	}
 
 	return nil
