@@ -17,11 +17,11 @@ var ExceptionURLS = []string{}
 type customResponseWriter struct {
 	http.ResponseWriter
 	statusCode int
-	response   []byte
+	response   string
 }
 
 func NewResponseWriter(w http.ResponseWriter) *customResponseWriter {
-	return &customResponseWriter{w, http.StatusOK, nil}
+	return &customResponseWriter{w, http.StatusOK, ""}
 }
 
 func (rw *customResponseWriter) WriteHeader(code int) {
@@ -30,7 +30,7 @@ func (rw *customResponseWriter) WriteHeader(code int) {
 }
 
 func (rw *customResponseWriter) Write(content []byte) (int, error) {
-	rw.response = content
+	rw.response = string(content)
 	return rw.ResponseWriter.Write(content)
 }
 
@@ -86,9 +86,9 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 
 		if !ArrayContains(ExceptionURLS, r.RequestURI) {
 			if rw.statusCode >= 500 {
-				NotifyError("Exception Handler Middleware Error", description, "", "Response", string(rw.response), "Request", string(body))
+				NotifyError("Exception Handler Middleware Error", description, "", "Response", rw.response, "Request", string(body))
 			} else if rw.statusCode >= 400 {
-				NotifyWarn("Exception Handler Middleware Warn", description, "", "Response", string(rw.response), "Request", string(body))
+				NotifyWarn("Exception Handler Middleware Warn", description, "", "Response", rw.response, "Request", string(body))
 			}
 		}
 
