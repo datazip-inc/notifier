@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
 var ExceptionURLS = []string{}
+var notifylimiter = make(map[string]time.Time)
 
 type customResponseWriter struct {
 	http.ResponseWriter
@@ -84,7 +86,7 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 			return modifiedBody
 		}()
 
-		if !ArrayContains(ExceptionURLS, r.RequestURI) {
+		if shouldNotify(r) {
 			if rw.statusCode >= 500 {
 				NotifyError("Exception Handler Middleware Error", description, "", "Response", rw.response, "Request", string(body))
 			} else if rw.statusCode >= 400 {
@@ -124,4 +126,44 @@ func deleteFields(content map[string]interface{}) map[string]interface{} {
 	}
 
 	return content
+}
+
+func shouldNotify(r *http.Request) bool {
+	// is not exception url
+	if !ArrayContains(ExceptionURLS, r.RequestURI) {
+		return true
+	}
+
+	key := getRateLimitKey(getIPAddress(r), r.RequestURI)
+
+	timestamp, found := notifylimiter[key]
+	// first request add timestamp
+	if !found {
+		notifylimiter[key] = time.Now()
+		return true
+	}
+
+	// 10 minutes passed update timestamp
+	if time.Now().After(timestamp.Add(10 * time.Minute)) {
+		notifylimiter[key] = time.Now()
+		return true
+	}
+
+	return false
+}
+
+func getIPAddress(r *http.Request) string {
+	ipAddress := r.Header.Get("X-Forwarded-For")
+	if ipAddress == "" {
+		ipAddress = r.Header.Get("X-Real-IP")
+		if ipAddress == "" {
+			ipAddress = r.RemoteAddr
+		}
+	}
+
+	return ipAddress
+}
+
+func getRateLimitKey(ip string, endpoint string) string {
+	return ip + "#" + endpoint
 }
