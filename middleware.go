@@ -13,7 +13,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var ExceptionURLS = []string{}
+var RateLimitedNotificationUrls = []string{}
+var RateLimitingTime = 10 * time.Minute
 var notifylimiter = make(map[string]time.Time)
 
 type customResponseWriter struct {
@@ -130,7 +131,7 @@ func deleteFields(content map[string]interface{}) map[string]interface{} {
 
 func shouldNotify(r *http.Request) bool {
 	// is not exception url
-	if !ArrayContains(ExceptionURLS, r.RequestURI) {
+	if !ArrayContains(RateLimitedNotificationUrls, r.RequestURI) {
 		return true
 	}
 
@@ -143,8 +144,8 @@ func shouldNotify(r *http.Request) bool {
 		return true
 	}
 
-	// 10 minutes passed update timestamp
-	if time.Now().After(timestamp.Add(10 * time.Minute)) {
+	// rate limit time passed update timestamp
+	if time.Now().After(timestamp.Add(RateLimitingTime)) {
 		notifylimiter[key] = time.Now()
 		return true
 	}
