@@ -41,8 +41,8 @@ func (n *Notifier) NotifyWarn(warnAt, description, warnString string, fields ...
 
 // Notify error logs on Slack and returns error
 func (n *Notifier) NotifyErrorE(errorAt, description, errString string, fields ...string) error {
-	if !isConfigured(n.config.Error) {
-		return errors.New("❌ Slack error config not found or not properly configured")
+	if !isConfigured(n.config.Default) {
+		return errors.New("❌ Slack default config not found or not properly configured")
 	}
 
 	if len(fields)%2 != 0 {
@@ -64,12 +64,12 @@ func (n *Notifier) NotifyErrorE(errorAt, description, errString string, fields .
 	}
 
 	if len(errString) < 4000 {
-		err := n.SendOnSlack(errString, errorColor, n.config.Error, mainMessageFields, additionalMessageFields)
+		err := n.SendOnSlack(errString, errorColor, n.config.Default, mainMessageFields, additionalMessageFields)
 		if err != nil {
 			return fmt.Errorf("❌ Failed to report error on slack: %s", err)
 		}
 	} else {
-		err := n.SendOnSlackAsFile(errString, errorColor, n.config.Error, mainMessageFields, additionalMessageFields)
+		err := n.SendOnSlackAsFile(errString, errorColor, n.config.Default, mainMessageFields, additionalMessageFields)
 		if err != nil {
 			return fmt.Errorf("❌ Failed to report error on slack: %s", err)
 		}
@@ -80,8 +80,8 @@ func (n *Notifier) NotifyErrorE(errorAt, description, errString string, fields .
 
 // Notify success logs on Slack and returns error
 func (n *Notifier) NotifySuccessE(successAt, description, successString string, fields ...string) error {
-	if !isConfigured(n.config.Success) {
-		return errors.New("❌ Slack success config not found or not properly configured")
+	if !isConfigured(n.config.Default) {
+		return errors.New("❌ Slack default config not found or not properly configured")
 	}
 
 	if len(fields)%2 != 0 {
@@ -101,7 +101,7 @@ func (n *Notifier) NotifySuccessE(successAt, description, successString string, 
 		})
 	}
 
-	err := n.SendOnSlack(successString, successColor, n.config.Success, mainMessageFields, additionalMessageFields)
+	err := n.SendOnSlack(successString, successColor, n.config.Default, mainMessageFields, additionalMessageFields)
 	if err != nil {
 		return fmt.Errorf("❌ Failed to report success on slack: %s", err)
 	}
@@ -111,8 +111,8 @@ func (n *Notifier) NotifySuccessE(successAt, description, successString string, 
 
 // Notify warn logs on Slack
 func (n *Notifier) NotifyWarnE(warnAt, description, warnString string, fields ...string) error {
-	if !isConfigured(n.config.Warn) {
-		return errors.New("❌ Slack warn config not found or not properly configured")
+	if !isConfigured(n.config.Debug) {
+		return errors.New("❌ Slack debug config not found or not properly configured")
 	}
 
 	if len(fields)%2 != 0 {
@@ -133,7 +133,7 @@ func (n *Notifier) NotifyWarnE(warnAt, description, warnString string, fields ..
 		})
 	}
 
-	err := n.SendOnSlack(warnString, warnColor, n.config.Warn, mainMessageFields, additionalMessageFields)
+	err := n.SendOnSlack(warnString, warnColor, n.config.Debug, mainMessageFields, additionalMessageFields)
 	if err != nil {
 		return fmt.Errorf("❌ Failed to report warn on slack: %s", err)
 	}

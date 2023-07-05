@@ -2,9 +2,8 @@ package notifier
 
 type Config struct {
 	Token   string              `yaml:"token"`
-	Success *SlackChannelConfig `yaml:"success"`
-	Error   *SlackChannelConfig `yaml:"error"`
-	Warn    *SlackChannelConfig `yaml:"warn"`
+	Default *SlackChannelConfig `yaml:"default"`
+	Debug   *SlackChannelConfig `yaml:"debug"`
 }
 
 type SlackChannelConfig struct {
