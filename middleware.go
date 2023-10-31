@@ -68,8 +68,9 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 		// clone request and send it ahead
 		cloneRequest := r.Clone(r.Context())
 		cloneRequest.Body = io.NopCloser(bytes.NewReader(body))
+		start := time.Now()
 		next.ServeHTTP(rw, cloneRequest)
-
+		elapsed := time.Since(start)
 		description := fmt.Sprintf("failed request on *%s* with StatusCode: %d", r.RequestURI, rw.statusCode)
 
 		body = func() []byte {
@@ -95,7 +96,7 @@ func ExceptionHandlerMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		logrus.Debug("Exception Handler Middleware Passed!!!")
+		logrus.Debugf("Exception Handler Middleware Passed !!!, Request Time [%s]", elapsed)
 	})
 }
 
